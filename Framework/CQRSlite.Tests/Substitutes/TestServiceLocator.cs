@@ -1,25 +1,31 @@
 ﻿using System;
 using System.Collections.Generic;
-using CQRSlite.Bus;
-using CQRSlite.Config;
+using CQRSlite.Routing;
 
 namespace CQRSlite.Tests.Substitutes
 {
-    public class TestServiceLocator : IServiceLocator
+    public class TestServiceLocator : IServiceProvider
     {
         public readonly List<dynamic> Handlers = new List<dynamic>();
-        public T GetService<T>()
-        {
-            return (T)GetService(typeof(T));
-        }
+        public bool ReturnNull { get; set; }
 
         public object GetService(Type type)
         {
+            if (ReturnNull)
+                return null;
+
             if(type == typeof(IHandlerRegistrar))
                 return new TestHandleRegistrar();
+
             if (type == typeof(TestAggregateDidSomethingHandler))
             {
                 var handler = new TestAggregateDidSomethingHandler();
+                Handlers.Add(handler);
+                return handler;
+            }
+            if (type == typeof(TestAggregateDidSomethingInternalHandler))
+            {
+                var handler = new TestAggregateDidSomethingInternalHandler();
                 Handlers.Add(handler);
                 return handler;
             }
@@ -29,12 +35,19 @@ namespace CQRSlite.Tests.Substitutes
                 Handlers.Add(handler);
                 return handler;
             }
-            else
+            if (type == typeof(TestAggregateDoSomethingHandler))
             {
                 var handler = new TestAggregateDoSomethingHandler();
                 Handlers.Add(handler);
                 return handler;
             }
+            if (type == typeof(AllHandler))
+            {
+                var handler = new AllHandler();
+                Handlers.Add(handler);
+                return handler;
+            }
+            throw new ArgumentException($"Type {type.Name} not registered");
         }
     }
 }

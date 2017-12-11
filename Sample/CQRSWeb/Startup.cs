@@ -3,18 +3,19 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using CQRSlite.Bus;
 using CQRSlite.Commands;
 using CQRSlite.Events;
 using CQRSlite.Domain;
 using CQRSCode.WriteModel;
-using CQRSlite.Cache;
+using CQRSlite.Caching;
 using CQRSCode.ReadModel;
-using CQRSlite.Config;
 using CQRSCode.WriteModel.Handlers;
 using System.Reflection;
 using System.Linq;
 using CQRSlite.Messages;
+using CQRSlite.Routing;
+using Microsoft.AspNetCore.Http;
+using ISession = CQRSlite.Domain.ISession;
 
 namespace CQRSWeb
 {
@@ -26,14 +27,14 @@ namespace CQRSWeb
             services.AddMemoryCache();
 
             //Add Cqrs services
-            services.AddSingleton<InProcessBus>(new InProcessBus());
-            services.AddSingleton<ICommandSender>(y => y.GetService<InProcessBus>());
-            services.AddSingleton<IEventPublisher>(y => y.GetService<InProcessBus>());
-            services.AddSingleton<IHandlerRegistrar>(y => y.GetService<InProcessBus>());
-            services.AddScoped<ISession, Session>();
+            services.AddSingleton<Router>(new Router());
+            services.AddSingleton<ICommandSender>(y => y.GetService<Router>());
+            services.AddSingleton<IEventPublisher>(y => y.GetService<Router>());
+            services.AddSingleton<IHandlerRegistrar>(y => y.GetService<Router>());
             services.AddSingleton<IEventStore, InMemoryEventStore>();
-            services.AddScoped<ICache, MemoryCache>();
+            services.AddSingleton<ICache, MemoryCache>();
             services.AddScoped<IRepository>(y => new CacheRepository(new Repository(y.GetService<IEventStore>()), y.GetService<IEventStore>(), y.GetService<ICache>()));
+            services.AddScoped<ISession, Session>();
 
             services.AddTransient<IReadModelFacade, ReadModelFacade>();
 
@@ -49,13 +50,12 @@ namespace CQRSWeb
                     .AsSelf()
                     .WithTransientLifetime()
             );
-
             // Add framework services.
             services.AddMvc();
 
-            //Register bus
+            //Register routes
             var serviceProvider = services.BuildServiceProvider();
-            var registrar = new BusRegistrar(new DependencyResolver(serviceProvider));
+            var registrar = new RouteRegistrar(new Provider(serviceProvider));
             registrar.Register(typeof(InventoryCommandHandlers));
 
             return serviceProvider;
@@ -73,6 +73,26 @@ namespace CQRSWeb
                     name: "default",
                     template: "{controller=Home}/{action=Index}/{id?}");
             });
+        }
+    }
+
+
+    //This makes scoped services work inside router.
+    public class Provider : IServiceProvider
+    {
+        private readonly ServiceProvider _serviceProvider;
+        private readonly IHttpContextAccessor _contextAccessor;
+
+        public Provider(ServiceProvider serviceProvider)
+        {
+            _serviceProvider = serviceProvider;
+            _contextAccessor = _serviceProvider.GetService<IHttpContextAccessor>();
+        }
+
+        public object GetService(Type serviceType)
+        {
+            return _contextAccessor?.HttpContext?.RequestServices.GetService(serviceType) ??
+                   _serviceProvider.GetService(serviceType);
         }
     }
 }

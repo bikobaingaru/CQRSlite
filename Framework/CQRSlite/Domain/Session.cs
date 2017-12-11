@@ -7,11 +7,18 @@ using System.Threading.Tasks;
 
 namespace CQRSlite.Domain
 {
+    /// <summary>
+    /// Implementation of unit of work for aggregates.
+    /// </summary>
     public class Session : ISession
     {
         private readonly IRepository _repository;
         private readonly Dictionary<Guid, AggregateDescriptor> _trackedAggregates;
-
+        
+        /// <summary>
+        /// Initialize Session
+        /// </summary>
+        /// <param name="repository"></param>
         public Session(IRepository repository)
         {
             _repository = repository ?? throw new ArgumentNullException(nameof(repository));
@@ -62,6 +69,12 @@ namespace CQRSlite.Domain
         {
             await Task.WhenAll(_trackedAggregates.Values.Select(x => _repository.Save(x.Aggregate, x.Version, cancellationToken)));
             _trackedAggregates.Clear();
+        }
+
+        private class AggregateDescriptor
+        {
+            public AggregateRoot Aggregate { get; set; }
+            public int Version { get; set; }
         }
     }
 }

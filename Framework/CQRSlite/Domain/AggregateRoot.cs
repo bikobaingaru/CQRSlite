@@ -3,9 +3,13 @@ using CQRSlite.Events;
 using CQRSlite.Infrastructure;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace CQRSlite.Domain
 {
+    /// <summary>
+    /// Class to inherit all aggregates from
+    /// </summary>
     public abstract class AggregateRoot
     {
         private readonly List<IEvent> _changes = new List<IEvent>();
@@ -21,6 +25,10 @@ namespace CQRSlite.Domain
             }
         }
 
+        /// <summary>
+        /// Returns all uncommited changes and clears aggregate of them.
+        /// </summary>
+        /// <returns>Array of new uncommited events</returns>
         public IEvent[] FlushUncommitedChanges()
         {
             lock (_changes)
@@ -41,49 +49,51 @@ namespace CQRSlite.Domain
                     @event.Version = Version + i;
                     @event.TimeStamp = DateTimeOffset.UtcNow;
                 }
-                Version = Version + _changes.Count;
+                Version = Version + changes.Length;
                 _changes.Clear();
                 return changes;
             }
         }
 
+        /// <summary>
+        /// Load an aggregate from an enumerable of events.
+        /// </summary>
+        /// <param name="history">All events to be loaded.</param>
         public void LoadFromHistory(IEnumerable<IEvent> history)
-        {
-            foreach (var e in history)
-            {
-                if (e.Version != Version + 1)
-                {
-                    throw new EventsOutOfOrderException(e.Id);
-                }
-                ApplyChange(e, false);
-            }
-        }
-
-        protected void ApplyChange(IEvent @event)
-        {
-            ApplyChange(@event, true);
-        }
-
-        private void ApplyChange(IEvent @event, bool isNew)
         {
             lock (_changes)
             {
-                Apply(@event);
-                if (isNew)
+                foreach (var e in history.ToArray())
                 {
-                    _changes.Add(@event);
-                }
-                else
-                {
-                    Id = @event.Id;
+                    if (e.Version != Version + 1)
+                    {
+                        throw new EventsOutOfOrderException(e.Id);
+                    }
+                    ApplyEvent(e);
+                    Id = e.Id;
                     Version++;
                 }
             }
         }
 
-        protected virtual void Apply(IEvent @event)
+        protected void ApplyChange(IEvent @event)
         {
-            this.AsDynamic().Apply(@event);
+            lock (_changes)
+            {
+                ApplyEvent(@event);
+                _changes.Add(@event);
+            }
+        }
+
+        /// <summary>
+        /// Overrideable method for applying events on aggregate
+        /// This is called interally when rehydrating aggregates.
+        /// Can be overridden if you want custom handling.
+        /// </summary>
+        /// <param name="event">Event to apply</param>
+        protected virtual void ApplyEvent(IEvent @event)
+        {
+            this.Invoke("Apply", @event);
         }
     }
 }
