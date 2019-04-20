@@ -11,36 +11,35 @@ namespace CQRSlite.Tests.Domain
 {
     public class When_saving
     {
-        private TestInMemoryEventStore _eventStore;
-        private TestAggregateNoParameterLessConstructor _aggregate;
-	    private ISession _session;
-	    private Repository _rep;
+        private readonly TestInMemoryEventStore _eventStore;
+        private readonly TestAggregateNoParameterLessConstructor _aggregate;
+	    private readonly ISession _session;
 
         public When_saving()
         {
             _eventStore = new TestInMemoryEventStore();
-            _rep = new Repository(_eventStore);
-            _session = new Session(_rep);
+            var rep = new Repository(_eventStore);
+            _session = new Session(rep);
 
             _aggregate = new TestAggregateNoParameterLessConstructor(2);
         }
 
         [Fact]
-        public void Should_save_uncommited_changes()
+        public void Should_save_uncommitted_changes()
         {
             _aggregate.DoSomething();
             _session.Add(_aggregate);
             _session.Commit();
-            Assert.Equal(1, _eventStore.Events.Count);
+            Assert.Single(_eventStore.Events);
         }
 
         [Fact]
-        public void Should_mark_commited_after_commit()
+        public void Should_mark_committed_after_commit()
         {
             _aggregate.DoSomething();
             _session.Add(_aggregate);
             _session.Commit();
-            Assert.Equal(0, _aggregate.GetUncommittedChanges().Length);
+            Assert.Empty(_aggregate.GetUncommittedChanges());
         }
         
         [Fact]
@@ -50,7 +49,7 @@ namespace CQRSlite.Tests.Domain
             agg.DoSomething();
             await _session.Add(agg);
             await _session.Commit();
-            Assert.Equal(1, _eventStore.Events.Count);
+            Assert.Single(_eventStore.Events);
         }
 
         [Fact]

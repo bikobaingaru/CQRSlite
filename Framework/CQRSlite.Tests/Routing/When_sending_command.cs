@@ -11,7 +11,7 @@ namespace CQRSlite.Tests.Routing
 {
     public class When_sending_command
     {
-        private Router _router;
+        private readonly Router _router;
 
         public When_sending_command()
         {
@@ -81,6 +81,15 @@ namespace CQRSlite.Tests.Routing
             var handler = new TestAggregateDoSomethingHandler();
             _router.RegisterHandler<TestAggregateDoSomething>(handler.Handle);
             await _router.Send(new TestAggregateDoSomething {LongRunning = true});
+            Assert.Equal(1, handler.TimesRun);
+        }
+
+        [Fact]
+        public async Task Should_run_explicitly_implemented_interfaces()
+        {
+            var handler = new TestAggregateDoSomethingHandlerExplicit();
+            _router.RegisterHandler<TestAggregateDoSomething>((x, t) => ((ICommandHandler<TestAggregateDoSomething>)handler).Handle(x));
+            await _router.Send(new TestAggregateDoSomething());
             Assert.Equal(1, handler.TimesRun);
         }
 

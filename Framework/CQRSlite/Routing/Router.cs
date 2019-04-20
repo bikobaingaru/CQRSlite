@@ -1,18 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CQRSlite.Commands;
 using CQRSlite.Events;
 using CQRSlite.Messages;
+using CQRSlite.Queries;
 
 namespace CQRSlite.Routing
 {
     /// <summary>
     /// Default router implementation for sending commands and publishing events.
     /// </summary>
-    public class Router : ICommandSender, IEventPublisher, IHandlerRegistrar
+    public class Router : ICommandSender, IEventPublisher, IQueryProcessor, IHandlerRegistrar
     {
         private readonly Dictionary<Type, List<Func<IMessage, CancellationToken, Task>>> _routes = new Dictionary<Type, List<Func<IMessage, CancellationToken, Task>>>();
 
@@ -28,10 +28,11 @@ namespace CQRSlite.Routing
 
         public Task Send<T>(T command, CancellationToken cancellationToken = default(CancellationToken)) where T : class, ICommand
         {
-            if (!_routes.TryGetValue(command.GetType(), out var handlers))
-                throw new InvalidOperationException("No handler registered");
+            var type = command.GetType();
+            if (!_routes.TryGetValue(type, out var handlers))
+                throw new InvalidOperationException($"No handler registered for {type.FullName}");
             if (handlers.Count != 1)
-                throw new InvalidOperationException("Cannot send to more than one handler");
+                throw new InvalidOperationException($"Cannot send to more than one handler of {type.FullName}");
             return handlers[0](command, cancellationToken);
         }
 
@@ -40,7 +41,22 @@ namespace CQRSlite.Routing
             if (!_routes.TryGetValue(@event.GetType(), out var handlers))
                 return Task.FromResult(0);
 
-            return Task.WhenAll(handlers.Select(handler => handler(@event, cancellationToken)));
+            var tasks = new Task[handlers.Count];
+            for (var index = 0; index < handlers.Count; index++)
+            {
+                tasks[index] = handlers[index](@event, cancellationToken);
+            }
+            return Task.WhenAll(tasks);
+        }
+
+        public Task<TResponse> Query<TResponse>(IQuery<TResponse> query, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            var type = query.GetType();
+            if (!_routes.TryGetValue(type, out var handlers))
+                throw new InvalidOperationException($"No handler registered for {type.FullName}");
+            if (handlers.Count != 1)
+                throw new InvalidOperationException($"Cannot query more than one handler of {type.FullName}");
+            return (Task<TResponse>)handlers[0](query, cancellationToken);
         }
     }
 }
